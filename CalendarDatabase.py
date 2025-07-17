@@ -1,6 +1,7 @@
 import socket
 import threading
 import os
+from pathlib import Path
 
 def handleClientRecieving(connId, end):
     
@@ -52,7 +53,7 @@ def handleClientRecieving(connId, end):
                         client.close
                         clients.remove(client)
                 break
-            if line1[0] == "Post" and firstTime:
+            if line1[0] == "Get" and firstTime:
                 firstTime = False
                 line2 = parse[1].split(" ")
                 line3 = parse[2].split(" ")
@@ -70,7 +71,32 @@ def handleClientRecieving(connId, end):
                     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     client.connect((socket.gethostbyname(clientHost), int(clientPort)))
                     clients.append(client)
-                broadcast("Hello, another client has join the server.") 
+                ## broadcast("Hello, another client has join the server.")
+                file = parse[4]
+                print(f"{file}")
+                with clients_lock:
+                    sendCalendar(client, file)
+
+            if line1[0] == "Post":
+                firstTime = False
+                line2 = parse[1].split(" ")
+                line3 = parse[2].split(" ")
+                if len(line2) != 2 or line2[0] != "Host:":
+                    print(f"Client {clientHost} has left the server.\n")
+                    if client != None:
+                        with clients_lock:
+                            client.close
+                            clients.remove(client)
+                    break
+                with clients_lock:
+                    file = parse[4]
+                    version = parse[5]
+                    events = parse[5:]
+                    with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "w", newline='') as newFile:
+                        for line in events[:-3]:
+                            newFile.write(line + "\r\n")
+                    print("File writen")
+
             
             if line1[0] == "Put":
                 line2 = parse[1].split(" ")
@@ -82,16 +108,23 @@ def handleClientRecieving(connId, end):
             break
     return
 
-def compareCalendar(client, file, changes):
+def sendCalendar(client, file):
     try:
         os.mkdir("CalendarDatabase")
-    except FileExistsError:
-        print("CalendarDatabase file directory exists.")
-    except Exception as e:
-        print(f"{e}")
+    except Exception:
+        print()
+    if not (Path(__file__).parent / "CalendarDatabase" / f"{file}").exists():
+        try:
+            client.sendall(f"Get\r\nFile: {file}\r\n\r\n".encode())
+        except Exception as e:
+            print(e) 
         return
-    
+    with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "r") as file:
+        fileData = file.read()
+        client.sendall(f"Post\r\n{fileData}\r\n\r\n".encode())
+    return
 
+def updateCalendar(client, version, file, changes):
     return
 
 def broadcast(message):
