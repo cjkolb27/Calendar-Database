@@ -21,7 +21,7 @@ def handleClientRecieving(connId, end):
                         client.close
                         clients.remove(client)
                 break
-            while "*]*END*[*\r\n\r\n" not in data:
+            while "\r\n\r\n" not in data:
                 sent = connId.recv(1024).decode()
                 if not sent or not data:
                     if client != None:
@@ -103,6 +103,15 @@ def handleClientRecieving(connId, end):
                 if len(line2) != 2 or line2[0] != "Host:":
                     print(f"Client {clientHost} has left the server.\n")
                     break
+                
+                with clients_lock:
+                    print()
+
+            if line1[0] == "Puts":
+                line2 = parse[1].split(" ")
+                if len(line2) != 2 or line2[0] != "Host:":
+                    print(f"Client {clientHost} has left the server.\n")
+                    break
 
         except:
             break
@@ -129,12 +138,11 @@ def updateCalendar(client, version, file, changes):
 
 def broadcast(message):
     print(f"\r\nBroadcasted: {message}\r\n")
-    with clients_lock:
-        for client in clients:
-            try:
-                client.sendall(f"{message}\r\n\r\n".encode())
-            except Exception as e:
-                print(e)
+    for client in clients:
+        try:
+            client.sendall(f"{message}\r\n\r\n".encode())
+        except Exception as e:
+            print(e)
     return
 
 def serverInputHandler(end):
