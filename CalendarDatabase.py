@@ -1,6 +1,7 @@
 import socket
 import threading
 import os
+import datetime
 from pathlib import Path
 
 def handleClientRecieving(connId, end):
@@ -100,12 +101,15 @@ def handleClientRecieving(connId, end):
             
             if line1[0] == "Put":
                 line2 = parse[1].split(" ")
+                line6 = parse[5]
+                version = parse[3].split(" ")[1]
                 if len(line2) != 2 or line2[0] != "Host:":
                     print(f"Client {clientHost} has left the server.\n")
                     break
-                
+
                 with clients_lock:
-                    print()
+                    updateCalendar(client, version, parse[4], [line6])
+                    print("Finished!!!!")
 
             if line1[0] == "Puts":
                 line2 = parse[1].split(" ")
@@ -134,6 +138,85 @@ def sendCalendar(client, file):
     return
 
 def updateCalendar(client, version, file, changes):
+    print(f"{client} {version} {file} {changes}")
+    changed = []
+    with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "r") as theFile:
+        split = changes[0].split("@@")
+        theVersion = int(theFile.readline()) + 1
+        fileData = f"{theVersion}\r\n"
+        fileLine = theFile.readline()
+        deleted = None
+        while fileLine:
+            if len(changes) > 0:
+                line = fileLine.split("@@")
+                if split[0] == "NotSynced":
+                    if (int(line[3]) > int(split[5]) and int(line[4]) == int(split[6])) or (int(line[4]) > int(split[6])) or (int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3])):
+                        fileData += "@@".join(split[2:]) + "\r\n"
+                        fileData += fileLine
+                        print(f"{(int(line[3]) > int(split[5]) and int(line[4]) == int(split[6]))} or {(int(line[4]) > int(split[6]))} or {(int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3]))}")
+                        changed.append(changes[0])
+                        changes = changes[1:]
+                        if len(changes) > 0:
+                            split = changes[0].split("@@")
+                        else:
+                            split[0] = "NULL"
+                    else:
+                        fileData += fileLine
+                elif split[0] == "Deleted":
+                    if deleted == None:
+                        deleted = split[1].split("/")[11]
+                    print(f"Diff {line[9]} {deleted}")
+                    if line[9] == deleted:
+                        print(f"FOUND: {line[9]} {deleted}")
+                        changed.append(changes[0])
+                        changes = changes[1:]
+                        if len(changes) > 0:
+                            split = changes[0].split("@@")
+                        else:
+                            split[0] = "NULL"
+                        deleted = None
+                    else:
+                       fileData += fileLine 
+                elif split[0] == "Edited":
+                    if deleted == None:
+                        deleted = split[1].split("/")[11]
+                    print(f"Diff {line[9]} {deleted}")
+                    if line[9] == deleted:
+                        print(f"FOUND: {line[9]} {deleted} {"@@".join(split[1].split("/")[2:])}")
+                        fileData += "@@".join(split[2:]) + "\r\n"
+                        changed.append(changes[0])
+                        changes = changes[1:]
+                        if len(changes) > 0:
+                            split = changes[0].split("@@")
+                        else:
+                            split[0] = "NULL"
+                        deleted = None
+                    else:
+                       fileData += fileLine 
+                else:
+                    fileData += fileLine
+            else:
+                fileData += fileLine
+            fileLine = theFile.readline()
+        while len(changes) > 0:
+            print("TEST2")
+            if split[0] == "NotSynced":
+                fileData += "@@".join(split[2:]) + "\r\n"
+                changed.append(changes[0])
+                changes = changes[1:]
+                if len(changes) > 0:
+                    split = changes[0].split("@@")
+            if split[0] == "Edited" or split[0] == "Deleted":
+                changes = changes[1:]
+                if len(changes) > 0:
+                    split = changes[0].split("@@")
+        #print(fileData)
+        with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "w", newline='') as newFile:
+            newFile.write(fileData)
+
+    if len(changed) > 0:
+        print(f"Changed: {changed}")
+        broadcast(f"Put {serverVersion}\r\nFile: {file}\r\nVersion: {int(version) + 1}\r\n{"\r\n".join(changed)}")
     return
 
 def broadcast(message):
@@ -145,9 +228,24 @@ def broadcast(message):
             print(e)
     return
 
+def time_to_int(t): 
+    time = 0
+    t = t.replace(":", "")
+    if "a" in t:
+        t = t.replace("a", "")
+        time = int(t)
+        if time >= 1200:
+            time -= 1200
+    else:
+        t = t.replace("p", "")
+        time = int(t)
+        if time < 1200:
+            time += 1200
+    return time
+
 def serverInputHandler(end):
     cmd = input("")
-    while(cmd != "Quit"):
+    while(cmd != "q" and cmd != "quit"):
         broadcast(cmd)
         cmd = input("")
     end[0] = False
@@ -165,6 +263,7 @@ if __name__ == "__main__":
     serverHostname = socket.gethostname()
     serverPort = 2727
     processCount = 1
+    serverVersion = "Ver1.0"
 
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
