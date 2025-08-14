@@ -14,7 +14,8 @@ def handleClientRecieving(connId, end):
 
     while(end[0]):
         try:
-            data = connId.recv(1024).decode()
+            if len(data) == 0:
+                data = connId.recv(1024).decode()
             if not data:
                 print(f"Client {clientHost} has left the server.\n")
                 if client != None:
@@ -31,7 +32,6 @@ def handleClientRecieving(connId, end):
                             clients.remove(client)
                     return
                 data += sent
-
         except Exception as e:
             print(f"{e}\r\nClient {clientHost} has left the server.\n")
             if client != None:
@@ -43,8 +43,13 @@ def handleClientRecieving(connId, end):
         if not end[0]:
             break
         
-        print("\r\n" + data)
-        parse = data.split("\r\n")
+        foundData = data[:(data.find("\r\n\r\n") + 4)]
+        data = data[(data.find("\r\n\r\n") + 4):]
+        while data.find("\r\n") == 0:
+            data = data[2:]
+
+        print("Data:\r\n" + foundData)
+        parse = foundData.split("\r\n")
         try:
             line1 = parse[0].split(" ")
             if len(line1) != 2 and line1[1] != version():
@@ -101,22 +106,18 @@ def handleClientRecieving(connId, end):
             
             if line1[0] == "Put":
                 line2 = parse[1].split(" ")
-                line6 = parse[5]
+                line6 = parse[5:]
+                print(line6)
+                line6 = line6[:-2]
+                print(line6)
                 version = parse[3].split(" ")[1]
                 if len(line2) != 2 or line2[0] != "Host:":
                     print(f"Client {clientHost} has left the server.\n")
                     break
 
                 with clients_lock:
-                    updateCalendar(client, version, parse[4], [line6])
+                    updateCalendar(client, version, parse[4], line6)
                     print("Finished!!!!")
-
-            if line1[0] == "Puts":
-                line2 = parse[1].split(" ")
-                if len(line2) != 2 or line2[0] != "Host:":
-                    print(f"Client {clientHost} has left the server.\n")
-                    break
-
         except:
             break
     return
@@ -140,19 +141,23 @@ def sendCalendar(client, file):
 def updateCalendar(client, version, file, changes):
     print(f"{client} {version} {file} {changes}")
     changed = []
+    fileData = ""
     with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "r") as theFile:
         split = changes[0].split("@@")
         theVersion = int(theFile.readline()) + 1
+        serverVersion = theVersion
         fileData = f"{theVersion}\r\n"
         fileLine = theFile.readline()
         deleted = None
+        found = False
         while fileLine:
+            found = False
             if len(changes) > 0:
                 line = fileLine.split("@@")
                 if split[0] == "NotSynced":
                     if (int(line[3]) > int(split[5]) and int(line[4]) == int(split[6])) or (int(line[4]) > int(split[6])) or (int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3])):
                         fileData += "@@".join(split[2:]) + "\r\n"
-                        fileData += fileLine
+                        found = True
                         print(f"{(int(line[3]) > int(split[5]) and int(line[4]) == int(split[6]))} or {(int(line[4]) > int(split[6]))} or {(int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3]))}")
                         changed.append(changes[0])
                         changes = changes[1:]
@@ -164,10 +169,10 @@ def updateCalendar(client, version, file, changes):
                         fileData += fileLine
                 elif split[0] == "Deleted":
                     if deleted == None:
-                        deleted = split[1].split("/")[11]
-                    print(f"Diff {line[9]} {deleted}")
-                    if line[9] == deleted:
-                        print(f"FOUND: {line[9]} {deleted}")
+                        deleted = split[1].split("/")
+                    print(f"Diff {line[9]} {deleted[11]}")
+                    if line[9] == deleted[11] and line[1] == deleted[3] and line[3] == deleted[5] and line[4] == deleted[6]:
+                        print(f"FOUND: {line[9]} {deleted[11]}")
                         changed.append(changes[0])
                         changes = changes[1:]
                         if len(changes) > 0:
@@ -179,10 +184,10 @@ def updateCalendar(client, version, file, changes):
                        fileData += fileLine 
                 elif split[0] == "Edited":
                     if deleted == None:
-                        deleted = split[1].split("/")[11]
-                    print(f"Diff {line[9]} {deleted}")
-                    if line[9] == deleted:
-                        print(f"FOUND: {line[9]} {deleted} {"@@".join(split[1].split("/")[2:])}")
+                        deleted = split[1].split("/")
+                    print(f"Diff {line[9]} {deleted[11]}")
+                    if line[9] == deleted[11] and line[1] == deleted[3] and line[3] == deleted[5] and line[4] == deleted[6]:
+                        print(f"FOUND: {line[9]} {deleted[11]} {"@@".join(split[1].split("/")[2:])}")
                         fileData += "@@".join(split[2:]) + "\r\n"
                         changed.append(changes[0])
                         changes = changes[1:]
@@ -197,9 +202,12 @@ def updateCalendar(client, version, file, changes):
                     fileData += fileLine
             else:
                 fileData += fileLine
-            fileLine = theFile.readline()
+            if not found:
+                fileLine = theFile.readline()
         while len(changes) > 0:
             print("TEST2")
+            if changes[0] == "":
+                break
             if split[0] == "NotSynced":
                 fileData += "@@".join(split[2:]) + "\r\n"
                 changed.append(changes[0])
@@ -211,12 +219,12 @@ def updateCalendar(client, version, file, changes):
                 if len(changes) > 0:
                     split = changes[0].split("@@")
         #print(fileData)
-        with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "w", newline='') as newFile:
-            newFile.write(fileData)
+    with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "w", newline='') as newFile:
+        newFile.write(fileData)
 
     if len(changed) > 0:
         print(f"Changed: {changed}")
-        broadcast(f"Put {serverVersion}\r\nFile: {file}\r\nVersion: {int(version) + 1}\r\n{"\r\n".join(changed)}")
+        broadcast(f"Put\r\nFile: {file}\r\nVersion: {serverVersion}\r\n{"\r\n".join(changed)}")
     return
 
 def broadcast(message):
