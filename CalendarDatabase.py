@@ -233,6 +233,7 @@ def broadcast(message):
         try:
             client.sendall(f"{message}\r\n\r\n".encode())
         except Exception as e:
+            clients.remove(client)
             print(e)
     return
 
