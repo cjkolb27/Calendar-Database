@@ -142,82 +142,89 @@ def updateCalendar(client, version, file, changes):
     print(f"{client} {version} {file} {changes}")
     changed = []
     fileData = ""
-    with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "r") as theFile:
-        split = changes[0].split("@@")
-        theVersion = int(theFile.readline()) + 1
-        serverVersion = theVersion
-        fileData = f"{theVersion}\r\n"
-        fileLine = theFile.readline()
-        deleted = None
-        found = False
-        while fileLine:
+    try:
+        with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "r") as theFile:
+            split = changes[0].split("@@")
+            theVersion = int(theFile.readline()) + 1
+            serverVersion = theVersion
+            fileData = f"{theVersion}\r\n"
+            fileLine = theFile.readline()
+            deleted = None
             found = False
-            if len(changes) > 0:
-                line = fileLine.split("@@")
-                if split[0] == "NotSynced":
-                    if (int(line[3]) > int(split[5]) and int(line[4]) == int(split[6])) or (int(line[4]) > int(split[6])) or (int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3])):
-                        fileData += "@@".join(split[2:]) + "\r\n"
-                        found = True
-                        print(f"{(int(line[3]) > int(split[5]) and int(line[4]) == int(split[6]))} or {(int(line[4]) > int(split[6]))} or {(int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3]))}")
-                        changed.append(changes[0])
-                        changes = changes[1:]
-                        if len(changes) > 0:
-                            split = changes[0].split("@@")
+            while fileLine:
+                found = False
+                if len(changes) > 0:
+                    line = fileLine.split("@@")
+                    if split[0] == "NotSynced":
+                        if (int(line[3]) > int(split[5]) and int(line[4]) == int(split[6])) or (int(line[4]) > int(split[6])) or (int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3])):
+                            fileData += "@@".join(split[2:]) + "\r\n"
+                            found = True
+                            print(f"{(int(line[3]) > int(split[5]) and int(line[4]) == int(split[6]))} or {(int(line[4]) > int(split[6]))} or {(int(line[3]) == int(split[5]) and int(line[4]) == int(split[6]) and time_to_int(line[1]) > time_to_int(split[3]))}")
+                            changed.append(changes[0])
+                            changes = changes[1:]
+                            if len(changes) > 0:
+                                split = changes[0].split("@@")
+                            else:
+                                split[0] = "NULL"
                         else:
-                            split[0] = "NULL"
+                            fileData += fileLine
+                    elif split[0] == "Deleted":
+                        if deleted == None:
+                            deleted = split[1].split("/")
+                        print(f"Diff {line[9]} {deleted[11]}")
+                        if line[9] == deleted[11] and line[1] == deleted[3] and line[3] == deleted[5] and line[4] == deleted[6]:
+                            print(f"FOUND: {line[9]} {deleted[11]}")
+                            changed.append(changes[0])
+                            changes = changes[1:]
+                            if len(changes) > 0:
+                                split = changes[0].split("@@")
+                            else:
+                                split[0] = "NULL"
+                            deleted = None
+                        else:
+                            fileData += fileLine 
+                    elif split[0] == "Edited":
+                        if deleted == None:
+                            deleted = split[1].split("/")
+                        print(f"Diff {line[9]} {deleted[11]}")
+                        if line[9] == deleted[11] and line[1] == deleted[3] and line[3] == deleted[5] and line[4] == deleted[6]:
+                            print(f"FOUND: {line[9]} {deleted[11]} {"@@".join(split[1].split("/")[2:])}")
+                            fileData += "@@".join(split[2:]) + "\r\n"
+                            changed.append(changes[0])
+                            changes = changes[1:]
+                            if len(changes) > 0:
+                                split = changes[0].split("@@")
+                            else:
+                                split[0] = "NULL"
+                            deleted = None
+                        else:
+                            fileData += fileLine 
                     else:
                         fileData += fileLine
-                elif split[0] == "Deleted":
-                    if deleted == None:
-                        deleted = split[1].split("/")
-                    print(f"Diff {line[9]} {deleted[11]}")
-                    if line[9] == deleted[11] and line[1] == deleted[3] and line[3] == deleted[5] and line[4] == deleted[6]:
-                        print(f"FOUND: {line[9]} {deleted[11]}")
-                        changed.append(changes[0])
-                        changes = changes[1:]
-                        if len(changes) > 0:
-                            split = changes[0].split("@@")
-                        else:
-                            split[0] = "NULL"
-                        deleted = None
-                    else:
-                       fileData += fileLine 
-                elif split[0] == "Edited":
-                    if deleted == None:
-                        deleted = split[1].split("/")
-                    print(f"Diff {line[9]} {deleted[11]}")
-                    if line[9] == deleted[11] and line[1] == deleted[3] and line[3] == deleted[5] and line[4] == deleted[6]:
-                        print(f"FOUND: {line[9]} {deleted[11]} {"@@".join(split[1].split("/")[2:])}")
-                        fileData += "@@".join(split[2:]) + "\r\n"
-                        changed.append(changes[0])
-                        changes = changes[1:]
-                        if len(changes) > 0:
-                            split = changes[0].split("@@")
-                        else:
-                            split[0] = "NULL"
-                        deleted = None
-                    else:
-                       fileData += fileLine 
                 else:
                     fileData += fileLine
-            else:
-                fileData += fileLine
-            if not found:
-                fileLine = theFile.readline()
-        while len(changes) > 0:
-            print("TEST2")
-            if changes[0] == "":
-                break
-            if split[0] == "NotSynced":
-                fileData += "@@".join(split[2:]) + "\r\n"
-                changed.append(changes[0])
-                changes = changes[1:]
-                if len(changes) > 0:
-                    split = changes[0].split("@@")
-            if split[0] == "Edited" or split[0] == "Deleted":
-                changes = changes[1:]
-                if len(changes) > 0:
-                    split = changes[0].split("@@")
+                if not found:
+                    fileLine = theFile.readline()
+            while len(changes) > 0:
+                print("TEST2")
+                if changes[0] == "":
+                    break
+                if split[0] == "NotSynced":
+                    fileData += "@@".join(split[2:]) + "\r\n"
+                    changed.append(changes[0])
+                    changes = changes[1:]
+                    if len(changes) > 0:
+                        split = changes[0].split("@@")
+                if split[0] == "Edited" or split[0] == "Deleted":
+                    changes = changes[1:]
+                    if len(changes) > 0:
+                        split = changes[0].split("@@")
+    except FileNotFoundError:
+        print("File not found.")
+        fileData = f"1\r\n"
+        for change in changes:
+            fileData += f"{change.split("@@", 2)[-1]}"
+        print("Creating new file.")
         #print(fileData)
     with open((Path(__file__).parent / "CalendarDatabase" / f"{file}"), "w", newline='') as newFile:
         newFile.write(fileData)
