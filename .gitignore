@@ -1,3 +1,4 @@
 startConfig.txt
 .venv
 CalendarDatabase/*
+.env
