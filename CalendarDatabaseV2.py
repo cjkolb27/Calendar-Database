@@ -102,13 +102,14 @@ def handleClientRecieving(connId, end, db):
                 with clients_lock:
                     file = parse[3][:4]
                     version = parse[4]
-                    events = parse[5:]
+                    events = parse[5].split("\n")
                     print(f"{file}, {version}, {events}")
                     db.execute("UPDATE Versions SET version=? WHERE vyear=?", (int(version), int(file),))
                     print(f"Rows updated: {db.rowcount}")
                     for event in events:
-                        print(event)
+                        print(f"Next: {event}")
                         sp = event.split("@@")
+                        print(sp)
                         if len(sp) > 2:
                             db.execute("INSERT INTO Events (name, startTime, endTime, day, month, year, red, green, blue, tstamp) Values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sp[0], convertTime(sp[1]), convertTime(sp[2]), int(sp[3]), int(sp[4]), int(sp[5]), int(sp[6]), int(sp[7]), int(sp[8]), sp[9],))
                             print(f"Inserted count: {db.rowcount}")
@@ -432,7 +433,7 @@ if __name__ == "__main__":
 
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    serverSocket.bind((serverHostname, serverPort))
+    serverSocket.bind(("0.0.0.0", serverPort))
     print(f"Server is connected port {serverPort}, Hostname: {serverHostname}")
 
     serverSocket.listen()
